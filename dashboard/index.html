@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XONA Radar Agent — Autonomous Agent for Solana Narrative Signals</title>
+  <link rel="icon" href="https://xona-agent.com/icon-new.png" type="image/png">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #000000;
+      --surface: #0a0a0a;
+      --surface2: #111111;
+      --border: #1a1a1a;
+      --border-hover: #2a2a2a;
+      --text: #f0f0f0;
+      --text-dim: #666666;
+      --text-mid: #999999;
+      --accent: #ffffff;
+      --accent-dim: rgba(255,255,255,0.06);
+      --accent-glow: rgba(255,255,255,0.03);
+      --red: #e74c3c;
+      --red-dim: rgba(231,76,60,0.12);
+      --yellow: #f1c40f;
+      --yellow-dim: rgba(241,196,15,0.12);
+      --green: #2ecc71;
+      --green-dim: rgba(46,204,113,0.12);
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ===== Animated Background ===== */
+    .bg-animation {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+    .bg-animation svg { width: 100%; height: 100%; }
+
+    .scan-line {
+      stroke: rgba(255,255,255,0.03);
+      stroke-width: 0.5;
+      animation: scanDown 8s ease-in-out infinite;
+    }
+    @keyframes scanDown {
+      0% { transform: translateY(-100vh); opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { transform: translateY(100vh); opacity: 0; }
+    }
+
+    .float-circle {
+      fill: none;
+      stroke: rgba(255,255,255,0.02);
+      stroke-width: 0.5;
+      animation: floatPulse 12s ease-in-out infinite;
+    }
+    .float-circle:nth-child(2) { animation-delay: -4s; animation-duration: 16s; }
+    .float-circle:nth-child(3) { animation-delay: -8s; animation-duration: 20s; }
+    @keyframes floatPulse {
+      0%, 100% { r: 100; opacity: 0.3; }
+      50% { r: 200; opacity: 0.8; }
+    }
+
+    .grid-dot {
+      fill: rgba(255,255,255,0.015);
+      animation: dotPulse 6s ease-in-out infinite;
+    }
+    @keyframes dotPulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+
+    .radar-sweep {
+      fill: url(#sweepGradient);
+      transform-origin: 50% 50%;
+      animation: sweep 6s linear infinite;
+    }
+    @keyframes sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    /* ===== Layout ===== */
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+    /* ===== Header ===== */
+    header {
+      padding: 32px 0 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    header .container {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo { display: flex; align-items: center; gap: 14px; }
+    .logo img { width: 36px; height: 36px; border-radius: 8px; }
+    .logo-text { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
+    .logo-text span { font-weight: 300; color: var(--text-dim); margin-left: 6px; }
+
+    /* ===== Status Cards ===== */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border-bottom: 1px solid var(--border);
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .stat-cell {
+      background: var(--bg);
+      padding: 20px 24px;
+    }
+    .stat-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-size: 28px;
+      font-weight: 300;
+      letter-spacing: -0.5px;
+    }
+    .stat-value.sm {
+      font-size: 15px;
+      letter-spacing: 0;
+      padding-top: 6px;
+    }
+
+    /* Agent status indicator */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 400;
+    }
+    .status-indicator {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #333;
+      flex-shrink: 0;
+    }
+    .status-indicator.live {
+      background: var(--green);
+      box-shadow: 0 0 8px rgba(46,204,113,0.5);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .status-indicator.offline {
+      background: var(--red);
+      box-shadow: 0 0 6px rgba(231,76,60,0.3);
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* ===== Actions ===== */
+    .actions-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    button {
+      background: transparent;
+      color: var(--text-mid);
+      border: 1px solid var(--border);
+      padding: 8px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+      font-weight: 400;
+      letter-spacing: 0.3px;
+      transition: all 0.2s;
+    }
+    button:hover {
+      color: var(--text);
+      border-color: var(--border-hover);
+      background: var(--accent-dim);
+    }
+    button:disabled { opacity: 0.25; cursor: not-allowed; }
+    button.primary {
+      color: var(--bg);
+      background: var(--text);
+      border-color: var(--text);
+      font-weight: 500;
+    }
+    button.primary:hover { opacity: 0.85; }
+    .actions-spacer { flex: 1; }
+    .status-msg {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-weight: 300;
+    }
+
+    /* ===== Search & Sort Bar ===== */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 0 0;
+    }
+    .search-wrap {
+      flex: 1;
+      position: relative;
+    }
+    .search-wrap svg {
+      position: absolute;
+      left: 12px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-dim);
+      pointer-events: none;
+    }
+    .search-input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px 10px 38px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      font-weight: 300;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-input::placeholder { color: var(--text-dim); }
+    .search-input:focus { border-color: var(--border-hover); }
+
+    .sort-select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--text-mid);
+      font-size: 12px;
+      font-family: inherit;
+      font-weight: 400;
+      outline: none;
+      cursor: pointer;
+      -webkit-appearance: none;
+      appearance: none;
+      min-width: 160px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23666' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+      transition: border-color 0.2s;
+    }
+    .sort-select:focus { border-color: var(--border-hover); }
+    .sort-select option { background: var(--surface); color: var(--text); }
+
+    /* ===== Section ===== */
+    .section-header {
+      padding: 24px 0 16px;
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    .section-count {
+      font-size: 12px;
+      color: var(--text-dim);
+      font-weight: 300;
+    }
+
+    /* ===== Narrative Cards ===== */
+    .narrative-card {
+      border-top: 1px solid var(--border);
+      padding: 24px 0;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .narrative-card:hover { background: var(--accent-glow); }
+    .narrative-card.expanded { background: var(--accent-dim); }
+
+    .narrative-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+    }
+    .narrative-rank {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-weight: 500;
+      letter-spacing: 1px;
+      width: 28px;
+      flex-shrink: 0;
+      padding-top: 2px;
+    }
+    .narrative-content { flex: 1; min-width: 0; }
+    .narrative-header-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .narrative-name {
+      font-size: 16px;
+      font-weight: 500;
+      letter-spacing: -0.2px;
+    }
+    .narrative-date {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-weight: 300;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .narrative-desc {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.7;
+      font-weight: 300;
+    }
+    .narrative-tags {
+      display: flex;
+      gap: 6px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      font-size: 10px;
+      padding: 3px 10px;
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      color: var(--text-dim);
+      font-weight: 400;
+      letter-spacing: 0.3px;
+    }
+    .tag.stage {
+      color: var(--text-mid);
+      border-color: var(--border-hover);
+    }
+
+    /* Score badge with color */
+    .narrative-score-badge {
+      flex-shrink: 0;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: -0.3px;
+      text-align: center;
+      min-width: 64px;
+    }
+    .narrative-score-badge .score-max {
+      font-size: 10px;
+      font-weight: 300;
+      opacity: 0.6;
+    }
+    .score-good {
+      color: var(--green);
+      background: var(--green-dim);
+      border: 1px solid rgba(46,204,113,0.2);
+    }
+    .score-medium {
+      color: var(--yellow);
+      background: var(--yellow-dim);
+      border: 1px solid rgba(241,196,15,0.2);
+    }
+    .score-bad {
+      color: var(--red);
+      background: var(--red-dim);
+      border: 1px solid rgba(231,76,60,0.2);
+    }
+
+    /* Expanded details */
+    .narrative-details {
+      display: none;
+      margin-top: 20px;
+      padding: 20px 0 0 48px;
+    }
+    .narrative-card.expanded .narrative-details { display: block; }
+
+    .detail-section { margin-bottom: 24px; }
+    .detail-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-dim);
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+
+    /* Score grid with colors */
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .score-cell {
+      background: var(--surface);
+      padding: 12px 14px;
+    }
+    .score-cell-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 0.5px;
+      font-weight: 400;
+    }
+    .score-cell-value {
+      font-size: 18px;
+      font-weight: 300;
+      margin-top: 2px;
+    }
+    .score-cell-value .score-of {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* Evidence */
+    .evidence-item {
+      font-size: 13px;
+      color: var(--text-mid);
+      padding: 6px 0;
+      padding-left: 16px;
+      position: relative;
+      font-weight: 300;
+      line-height: 1.7;
+    }
+    .evidence-item::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 14px;
+      width: 4px; height: 4px;
+      border-radius: 50%;
+      background: var(--border-hover);
+    }
+
+    /* Build Ideas */
+    .idea-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+      margin-bottom: 8px;
+      transition: border-color 0.2s;
+    }
+    .idea-card:hover { border-color: var(--border-hover); }
+    .idea-name { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+    .idea-oneliner { font-size: 12px; color: var(--text-mid); margin-bottom: 10px; font-weight: 300; }
+    .idea-desc { font-size: 12px; color: var(--text-dim); line-height: 1.7; font-weight: 300; margin-bottom: 8px; }
+    .idea-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    /* States */
+    .loading-state { text-align: center; padding: 80px 0; }
+    .loader {
+      width: 24px; height: 24px;
+      border: 1px solid var(--border);
+      border-top-color: var(--text);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-size: 12px; color: var(--text-dim); font-weight: 300; }
+
+    .empty-state { text-align: center; padding: 80px 0; }
+    .empty-state h2 { font-size: 15px; font-weight: 500; margin-bottom: 8px; }
+    .empty-state p { font-size: 13px; color: var(--text-dim); font-weight: 300; }
+
+    .no-results { text-align: center; padding: 48px 0; }
+    .no-results p { font-size: 13px; color: var(--text-dim); font-weight: 300; }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 24px 0;
+      margin-top: 60px;
+    }
+    .footer-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-dim);
+      font-weight: 300;
+    }
+    footer a { color: var(--text-mid); text-decoration: none; transition: color 0.2s; }
+    footer a:hover { color: var(--text); }
+
+    @media (max-width: 640px) {
+      .stats-row { grid-template-columns: 1fr; }
+      .score-grid { grid-template-columns: repeat(2, 1fr); }
+      .narrative-top { flex-direction: column; gap: 8px; }
+      .narrative-details { padding-left: 0; }
+      .toolbar { flex-direction: column; gap: 8px; }
+      .sort-select { width: 100%; }
+      .narrative-header-row { flex-direction: column; align-items: flex-start; gap: 2px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Animated background -->
+  <div class="bg-animation">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" preserveAspectRatio="none">
+      <defs>
+        <radialGradient id="sweepGradient" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="rgba(255,255,255,0.01)" />
+          <stop offset="100%" stop-color="transparent" />
+        </radialGradient>
+      </defs>
+      <g>
+        <circle class="grid-dot" cx="200" cy="150" r="1" style="animation-delay: 0s" />
+        <circle class="grid-dot" cx="400" cy="150" r="1" style="animation-delay: -1s" />
+        <circle class="grid-dot" cx="600" cy="150" r="1" style="animation-delay: -2s" />
+        <circle class="grid-dot" cx="800" cy="150" r="1" style="animation-delay: -3s" />
+        <circle class="grid-dot" cx="1000" cy="150" r="1" style="animation-delay: -4s" />
+        <circle class="grid-dot" cx="1200" cy="150" r="1" style="animation-delay: -5s" />
+        <circle class="grid-dot" cx="200" cy="350" r="1" style="animation-delay: -0.5s" />
+        <circle class="grid-dot" cx="400" cy="350" r="1" style="animation-delay: -1.5s" />
+        <circle class="grid-dot" cx="600" cy="350" r="1" style="animation-delay: -2.5s" />
+        <circle class="grid-dot" cx="800" cy="350" r="1" style="animation-delay: -3.5s" />
+        <circle class="grid-dot" cx="1000" cy="350" r="1" style="animation-delay: -4.5s" />
+        <circle class="grid-dot" cx="1200" cy="350" r="1" style="animation-delay: -5.5s" />
+        <circle class="grid-dot" cx="200" cy="550" r="1" style="animation-delay: -1s" />
+        <circle class="grid-dot" cx="400" cy="550" r="1" style="animation-delay: -2s" />
+        <circle class="grid-dot" cx="600" cy="550" r="1" style="animation-delay: -3s" />
+        <circle class="grid-dot" cx="800" cy="550" r="1" style="animation-delay: -4s" />
+        <circle class="grid-dot" cx="1000" cy="550" r="1" style="animation-delay: -5s" />
+        <circle class="grid-dot" cx="1200" cy="550" r="1" style="animation-delay: -0.5s" />
+        <circle class="grid-dot" cx="200" cy="750" r="1" style="animation-delay: -2s" />
+        <circle class="grid-dot" cx="400" cy="750" r="1" style="animation-delay: -3s" />
+        <circle class="grid-dot" cx="600" cy="750" r="1" style="animation-delay: -4s" />
+        <circle class="grid-dot" cx="800" cy="750" r="1" style="animation-delay: -5s" />
+        <circle class="grid-dot" cx="1000" cy="750" r="1" style="animation-delay: -1s" />
+        <circle class="grid-dot" cx="1200" cy="750" r="1" style="animation-delay: -1.5s" />
+      </g>
+      <circle class="float-circle" cx="720" cy="450" r="120" />
+      <circle class="float-circle" cx="300" cy="200" r="80" />
+      <circle class="float-circle" cx="1100" cy="600" r="60" />
+      <line class="scan-line" x1="0" y1="0" x2="1440" y2="0" />
+      <path class="radar-sweep" d="M720,450 L720,250 A200,200 0 0,1 862,366 Z" />
+      <line x1="720" y1="350" x2="720" y2="550" stroke="rgba(255,255,255,0.015)" stroke-width="0.5" />
+      <line x1="620" y1="450" x2="820" y2="450" stroke="rgba(255,255,255,0.015)" stroke-width="0.5" />
+      <circle cx="720" cy="450" r="100" fill="none" stroke="rgba(255,255,255,0.012)" stroke-width="0.5" />
+      <circle cx="720" cy="450" r="200" fill="none" stroke="rgba(255,255,255,0.008)" stroke-width="0.5" />
+    </svg>
+  </div>
+
+  <header>
+    <div class="container">
+      <div class="logo">
+        <img src="https://xona-agent.com/icon-new.png" alt="XONA" />
+        <div class="logo-text">XONA Radar<span>Agent</span></div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Status Cards -->
+    <div class="stats-row">
+      <div class="stat-cell">
+        <div class="stat-label">Narratives</div>
+        <div class="stat-value" id="statNarratives">&mdash;</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">Agent Status</div>
+        <div class="stat-value" id="statAgentStatus">
+          <span class="status-badge">
+            <span class="status-indicator" id="agentDot"></span>
+            <span id="agentStatusText">Checking...</span>
+          </span>
+        </div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">Latest Fetch</div>
+        <div class="stat-value sm" id="statLatestFetch">&mdash;</div>
+      </div>
+    </div>
+
+    <div class="container">
+      <!-- Actions (visible only in debug mode: ?debug=true) -->
+      <div class="actions-bar" id="actionsBar" style="display:none;">
+        <button class="primary" onclick="triggerFullRun()" id="btnFullRun">Run Pipeline</button>
+        <button onclick="triggerCollect()" id="btnCollect">Collect</button>
+        <button onclick="triggerAnalyze()" id="btnAnalyze">Analyze</button>
+        <div class="actions-spacer"></div>
+        <span class="status-msg" id="statusMsg"></span>
+        <button onclick="loadData()">Refresh</button>
+      </div>
+
+      <!-- Search & Sort -->
+      <div class="toolbar">
+        <div class="search-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" class="search-input" id="searchInput" placeholder="Search narratives..." oninput="applyFilters()" />
+        </div>
+        <select class="sort-select" id="sortSelect" onchange="applyFilters()">
+          <option value="score-desc">Score: High to Low</option>
+          <option value="score-asc">Score: Low to High</option>
+          <option value="name-asc">Name: A to Z</option>
+          <option value="name-desc">Name: Z to A</option>
+          <option value="rank-asc">Rank: Best First</option>
+        </select>
+      </div>
+
+      <!-- Narratives -->
+      <div class="section-header">
+        <div class="section-title">Detected Narratives</div>
+        <div class="section-count" id="narrativeCount"></div>
+      </div>
+
+      <div id="narrativesList">
+        <div class="loading-state">
+          <div class="loader"></div>
+          <div class="loading-text">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <div class="footer-content">
+        <span>XONA Radar &middot; Solana Narrative Intelligence</span>
+        <span>
+          <a href="https://xona-agent.com" target="_blank">xona-agent.com</a>
+          &nbsp;&middot;&nbsp;
+          <a href="https://github.com/xona-labs" target="_blank">GitHub</a>
+        </span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const API = '';
+    const isDebug = new URLSearchParams(window.location.search).get('debug') === 'true';
+    let allNarratives = [];
+    let narrativeTimestamp = null;
+
+    // Show debug actions bar only with ?debug=true
+    if (isDebug) {
+      document.getElementById('actionsBar').style.display = '';
+    }
+
+    // ===== Score color helpers =====
+    function scoreClass(score, max) {
+      const pct = (score / max) * 100;
+      if (pct >= 65) return 'score-good';
+      if (pct >= 35) return 'score-medium';
+      return 'score-bad';
+    }
+
+    function scoreColor(score, max) {
+      const pct = (score / max) * 100;
+      if (pct >= 65) return 'var(--green)';
+      if (pct >= 35) return 'var(--yellow)';
+      return 'var(--red)';
+    }
+
+    // ===== Format date =====
+    function formatDate(iso) {
+      if (!iso) return '\u2014';
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        + ' \u00b7 '
+        + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatDateShort(iso) {
+      if (!iso) return '\u2014';
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // ===== Agent status check =====
+    async function checkAgentStatus() {
+      try {
+        const r = await fetch(`${API}/health`);
+        if (r.ok) {
+          const data = await r.json();
+          document.getElementById('agentDot').className = 'status-indicator live';
+          document.getElementById('agentStatusText').textContent = 'Live';
+          document.getElementById('agentStatusText').style.color = 'var(--green)';
+        } else {
+          setOffline();
+        }
+      } catch {
+        setOffline();
+      }
+    }
+
+    function setOffline() {
+      document.getElementById('agentDot').className = 'status-indicator offline';
+      document.getElementById('agentStatusText').textContent = 'Offline';
+      document.getElementById('agentStatusText').style.color = 'var(--red)';
+    }
+
+    // ===== Load data =====
+    async function loadData() {
+      try {
+        const [nRes, sRes] = await Promise.all([
+          fetch(`${API}/api/narratives`).then(r => r.json()),
+          fetch(`${API}/api/stats`).then(r => r.json()),
+        ]);
+
+        // Stats
+        if (sRes.success) {
+          document.getElementById('statNarratives').textContent = sRes.narratives?.count ?? '\u2014';
+        }
+
+        // Latest fetch timestamp
+        narrativeTimestamp = nRes.timestamp || null;
+        document.getElementById('statLatestFetch').textContent = narrativeTimestamp
+          ? formatDate(narrativeTimestamp) : 'Never';
+
+        // Store narratives globally for search/sort
+        allNarratives = (nRes.narratives || []).map(n => ({
+          ...n,
+          _detectedAt: narrativeTimestamp,
+        }));
+
+        document.getElementById('narrativeCount').textContent = allNarratives.length > 0
+          ? `${allNarratives.length} found` : '';
+
+        applyFilters();
+      } catch {
+        document.getElementById('narrativesList').innerHTML = `
+          <div class="empty-state">
+            <h2>No data yet</h2>
+            <p>Run the pipeline to collect signals and detect narratives.</p>
+          </div>`;
+      }
+    }
+
+    // ===== Search & Sort =====
+    function applyFilters() {
+      const query = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+      const sortVal = document.getElementById('sortSelect').value;
+
+      // Filter
+      let filtered = allNarratives;
+      if (query) {
+        filtered = allNarratives.filter(n =>
+          (n.name || '').toLowerCase().includes(query) ||
+          (n.description || '').toLowerCase().includes(query) ||
+          (n.topics || []).some(t => t.toLowerCase().includes(query)) ||
+          (n.sources || []).some(s => s.toLowerCase().includes(query)) ||
+          (n.stage || '').toLowerCase().includes(query)
+        );
+      }
+
+      // Sort
+      const sorted = [...filtered];
+      switch (sortVal) {
+        case 'score-desc': sorted.sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0)); break;
+        case 'score-asc': sorted.sort((a, b) => (a.totalScore || 0) - (b.totalScore || 0)); break;
+        case 'name-asc': sorted.sort((a, b) => (a.name || '').localeCompare(b.name || '')); break;
+        case 'name-desc': sorted.sort((a, b) => (b.name || '').localeCompare(a.name || '')); break;
+        case 'rank-asc': sorted.sort((a, b) => (a.rank || 0) - (b.rank || 0)); break;
+      }
+
+      // Update count
+      if (query && filtered.length !== allNarratives.length) {
+        document.getElementById('narrativeCount').textContent = `${filtered.length} of ${allNarratives.length} shown`;
+      } else {
+        document.getElementById('narrativeCount').textContent = allNarratives.length > 0
+          ? `${allNarratives.length} found` : '';
+      }
+
+      renderNarratives(sorted, query);
+    }
+
+    // ===== Render =====
+    function renderNarratives(narratives, query) {
+      if (allNarratives.length === 0) {
+        document.getElementById('narrativesList').innerHTML = `
+          <div class="empty-state">
+            <h2>No narratives detected</h2>
+            <p>Click "Run Pipeline" to collect signals and detect emerging narratives.</p>
+          </div>`;
+        return;
+      }
+
+      if (narratives.length === 0) {
+        document.getElementById('narrativesList').innerHTML = `
+          <div class="no-results">
+            <p>No narratives match "${esc(query)}"</p>
+          </div>`;
+        return;
+      }
+
+      document.getElementById('narrativesList').innerHTML = narratives.map(n => {
+        const sClass = scoreClass(n.totalScore || 0, 110);
+        return `
+        <div class="narrative-card" id="card-${n.id}" onclick="toggle('${n.id}')">
+          <div class="container">
+            <div class="narrative-top">
+              <div class="narrative-rank">${String(n.rank).padStart(2, '0')}</div>
+              <div class="narrative-content">
+                <div class="narrative-header-row">
+                  <div class="narrative-name">${esc(n.name)}</div>
+                  <div class="narrative-date">${formatDateShort(n._detectedAt)}</div>
+                </div>
+                <div class="narrative-desc">${esc(n.description)}</div>
+                <div class="narrative-tags">
+                  <span class="tag stage">${n.stage || 'emerging'}</span>
+                  ${n.velocity === 'rising' ? '<span class="tag stage">\u2191 rising</span>' : ''}
+                  ${(n.sources || []).map(s => `<span class="tag">${s}</span>`).join('')}
+                  ${(n.topics || []).slice(0, 3).map(t => `<span class="tag">${t}</span>`).join('')}
+                </div>
+              </div>
+              <div class="narrative-score-badge ${sClass}">
+                ${n.totalScore}<span class="score-max"> / 110</span>
+              </div>
+            </div>
+
+            <div class="narrative-details">
+              ${n.scores ? `
+              <div class="detail-section">
+                <div class="detail-label">Score Breakdown</div>
+                <div class="score-grid">
+                  ${renderScoreCell('Cross-Source', n.scores.crossSource, 30)}
+                  ${renderScoreCell('Evidence', n.scores.evidence, 25)}
+                  ${renderScoreCell('Velocity', n.scores.velocity, 20)}
+                  ${renderScoreCell('Stage', n.scores.stage, 15)}
+                  ${renderScoreCell('Confidence', n.scores.confidence, 10)}
+                  ${renderScoreCell('Signal Match', n.scores.signalCount, 10)}
+                </div>
+              </div>` : ''}
+
+              ${(n.evidence || []).length > 0 ? `
+              <div class="detail-section">
+                <div class="detail-label">Evidence</div>
+                ${n.evidence.map(e => `<div class="evidence-item">${esc(e)}</div>`).join('')}
+              </div>` : ''}
+
+              ${(n.buildIdeas || []).length > 0 ? `
+              <div class="detail-section">
+                <div class="detail-label">Build Ideas &middot; ${n.buildIdeas.length}</div>
+                ${n.buildIdeas.map(i => `
+                  <div class="idea-card">
+                    <div class="idea-name">${esc(i.name)}</div>
+                    <div class="idea-oneliner">${esc(i.oneLiner)}</div>
+                    <div class="idea-desc">${esc(i.description)}</div>
+                    ${i.whySolana ? `<div class="idea-desc"><strong style="color:var(--text-mid)">Why Solana</strong> &mdash; ${esc(i.whySolana)}</div>` : ''}
+                    ${i.technicalApproach ? `<div class="idea-desc"><strong style="color:var(--text-mid)">Approach</strong> &mdash; ${esc(i.technicalApproach)}</div>` : ''}
+                    <div class="idea-meta">
+                      <span class="tag">${i.difficulty || 'medium'}</span>
+                      ${i.targetUser ? `<span class="tag">${esc(i.targetUser)}</span>` : ''}
+                      ${i.monetization ? `<span class="tag">${esc(i.monetization)}</span>` : ''}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>` : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderScoreCell(label, value, max) {
+      const color = scoreColor(value || 0, max);
+      return `<div class="score-cell">
+        <div class="score-cell-label">${label}</div>
+        <div class="score-cell-value" style="color:${color}">${value}<span class="score-of">/${max}</span></div>
+      </div>`;
+    }
+
+    function toggle(id) {
+      const card = document.getElementById(`card-${id}`);
+      if (card) card.classList.toggle('expanded');
+    }
+
+    function esc(s) {
+      if (!s) return '';
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function setStatus(msg) { document.getElementById('statusMsg').textContent = msg; }
+    function setBtns(d) { ['btnFullRun','btnCollect','btnAnalyze'].forEach(id => document.getElementById(id).disabled = d); }
+
+    async function triggerFullRun() {
+      setStatus('Running full pipeline...'); setBtns(true);
+      try {
+        const r = await fetch(`${API}/api/full-run`, { method: 'POST' }).then(r => r.json());
+        setStatus(`${r.signalCount} signals \u2192 ${r.narrativeCount} narratives`);
+        loadData();
+      } catch (e) { setStatus('Error: ' + e.message); }
+      setBtns(false);
+    }
+
+    async function triggerCollect() {
+      setStatus('Collecting signals...'); setBtns(true);
+      try {
+        const r = await fetch(`${API}/api/collect`, { method: 'POST' }).then(r => r.json());
+        setStatus(`${r.signalCount} signals collected`);
+        loadData();
+      } catch (e) { setStatus('Error: ' + e.message); }
+      setBtns(false);
+    }
+
+    async function triggerAnalyze() {
+      setStatus('Analyzing narratives...'); setBtns(true);
+      try {
+        const r = await fetch(`${API}/api/analyze`, { method: 'POST' }).then(r => r.json());
+        setStatus(`${r.narrativeCount} narratives detected`);
+        loadData();
+      } catch (e) { setStatus('Error: ' + e.message); }
+      setBtns(false);
+    }
+
+    // Initial load
+    checkAgentStatus();
+    loadData();
+
+    // Periodically check agent status
+    setInterval(checkAgentStatus, 30000);
+  </script>
+</body>
+</html>

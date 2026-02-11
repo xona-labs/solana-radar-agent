@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  xona-radar:
+    build: .
+    container_name: xona-radar
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3010}:${PORT:-3010}"
+    env_file:
+      - .env
+    volumes:
+      # Persist signal & narrative data across restarts
+      - radar-data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:${PORT:-3010}/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  radar-data:
